@@ -22,7 +22,10 @@ package net.minecraftforge.fml.network.simple;
 import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
 import it.unimi.dsi.fastutil.shorts.Short2ObjectArrayMap;
 import net.minecraft.network.PacketBuffer;
+import net.minecraftforge.fml.network.NetworkDirection;
 import net.minecraftforge.fml.network.NetworkEvent;
+import net.minecraftforge.fml.network.NetworkHooks;
+import net.minecraftforge.fml.network.NetworkInstance;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.Marker;
@@ -58,16 +61,18 @@ public class IndexedMessageCodec
         private final int index;
         private final BiConsumer<MSG,Supplier<NetworkEvent.Context>> messageConsumer;
         private final Class<MSG> messageType;
+        private final Optional<NetworkDirection> networkDirection;
         private Optional<BiConsumer<MSG, Integer>> loginIndexSetter;
         private Optional<Function<MSG, Integer>> loginIndexGetter;
 
-        public MessageHandler(int index, Class<MSG> messageType, BiConsumer<MSG, PacketBuffer> encoder, Function<PacketBuffer, MSG> decoder, BiConsumer<MSG, Supplier<NetworkEvent.Context>> messageConsumer)
+        public MessageHandler(int index, Class<MSG> messageType, BiConsumer<MSG, PacketBuffer> encoder, Function<PacketBuffer, MSG> decoder, BiConsumer<MSG, Supplier<NetworkEvent.Context>> messageConsumer, final Optional<NetworkDirection> networkDirection)
         {
             this.index = index;
             this.messageType = messageType;
             this.encoder = Optional.ofNullable(encoder);
             this.decoder = Optional.ofNullable(decoder);
             this.messageConsumer = messageConsumer;
+            this.networkDirection = networkDirection;
             this.loginIndexGetter = Optional.empty();
             this.loginIndexSetter = Optional.empty();
             indicies.put((short)(index & 0xff), this);
@@ -144,10 +149,11 @@ public class IndexedMessageCodec
             LOGGER.error(SIMPLENET, "Received invalid discriminator byte {}", discriminator);
             return;
         }
+        NetworkHooks.validatePacketDirection(context.get().getDirection(), messageHandler.networkDirection, context.get().getNetworkManager());
         tryDecode(payload, context, payloadIndex, messageHandler);
     }
 
-    <MSG> MessageHandler<MSG> addCodecIndex(int index, Class<MSG> messageType, BiConsumer<MSG, PacketBuffer> encoder, Function<PacketBuffer, MSG> decoder, BiConsumer<MSG, Supplier<NetworkEvent.Context>> messageConsumer) {
-        return new MessageHandler<>(index, messageType, encoder, decoder, messageConsumer);
+    <MSG> MessageHandler<MSG> addCodecIndex(int index, Class<MSG> messageType, BiConsumer<MSG, PacketBuffer> encoder, Function<PacketBuffer, MSG> decoder, BiConsumer<MSG, Supplier<NetworkEvent.Context>> messageConsumer, final Optional<NetworkDirection> networkDirection) {
+        return new MessageHandler<>(index, messageType, encoder, decoder, messageConsumer, networkDirection);
     }
 }

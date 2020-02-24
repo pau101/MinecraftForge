@@ -30,14 +30,17 @@ import net.minecraft.network.handshake.client.CPacketHandshake;
 import net.minecraft.network.NetHandlerLoginServer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.IInteractionObject;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.player.PlayerContainerEvent;
+import net.minecraftforge.fml.common.thread.EffectiveSide;
 import net.minecraftforge.fml.config.ConfigTracker;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -66,7 +69,23 @@ public class NetworkHooks
 
     public static boolean onCustomPayload(final ICustomPacket<?> packet, final NetworkManager manager) {
         return NetworkRegistry.findTarget(packet.getName()).
+                filter(ni->validateSideForProcessing(packet, ni, manager)).
                 map(ni->ni.dispatch(packet.getDirection(), packet, manager)).orElse(Boolean.FALSE);
+    }
+
+    private static boolean validateSideForProcessing(final ICustomPacket<?> packet, final NetworkInstance ni, final NetworkManager manager) {
+        if (packet.getDirection().getReceptionSide() != EffectiveSide.get()) {
+            manager.closeChannel(new TextComponentString("Illegal packet received, terminating connection"));
+            return false;
+        }
+        return true;
+    }
+
+    public static void validatePacketDirection(final NetworkDirection packetDirection, final Optional<NetworkDirection> expectedDirection, final NetworkManager connection) {
+        if (packetDirection != expectedDirection.orElse(packetDirection)) {
+            connection.closeChannel(new TextComponentString("Illegal packet received, terminating connection"));
+            throw new IllegalStateException("Invalid packet received, aborting connection");
+        }
     }
 
     public static void registerServerLoginChannel(NetworkManager manager, CPacketHandshake packet)
